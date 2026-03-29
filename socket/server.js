@@ -10,7 +10,7 @@ let drivers = {};
 let connections = new Map();
 
 // Create WebSocket server
-const wss = new WebSocketServer({ port: 8080 });
+const wss = new WebSocketServer({ port: 8080, host: '0.0.0.0' });
 
 wss.on("connection", (ws) => {
   const pingInterval = setInterval(() => {

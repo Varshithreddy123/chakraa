@@ -15,7 +15,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { external } from "@/styles/external.style";
 import { windowHeight, windowWidth } from "@/themes/app.constant";
 import MapView, { Marker } from "react-native-maps";
-
 import MapViewDirections from "react-native-maps-directions";
 import { router } from "expo-router";
 import { Clock, LeftArrow, PickLocation, PickUpLocation } from "@/utils/icons";
@@ -37,17 +36,31 @@ import Constants from "expo-constants";
 
 export default function RidePlanScreen() {
   const { user } = useGetUserData();
-  const ws = useRef<any>(null);
+
+  // Dummy data for gathering options
+  interface DriverType {
+    id: string;
+    vehicle_type: string;
+    rate: string;
+  }
+  const dummyDrivers: DriverType[] = [
+    { id: '1', vehicle_type: 'Car', rate: '25' },
+    { id: '2', vehicle_type: 'Motorcycle', rate: '15' },
+    { id: '3', vehicle_type: 'Car', rate: '30' },
+    { id: '4', vehicle_type: 'Motorcycle', rate: '18' },
+  ];
+
+const ws = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const notificationListener = useRef<any>();
-  const mapRef = useRef<any>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [places, setPlaces] = useState<any>([]);
   const [query, setQuery] = useState("");
-  const [region, setRegion] = useState({
-    latitude: 16.3067,
-    longitude: 80.4365,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
+  const [region, setRegion] = useState<any>({
+    latitude: 37.78825,
+    longitude: -122.4324,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
   });
   const [marker, setMarker] = useState<any>(null);
   const [currentLocation, setCurrentLocation] = useState<any>(null);
@@ -61,9 +74,17 @@ export default function RidePlanScreen() {
     transit: null,
   });
   const [keyboardAvoidingHeight, setkeyboardAvoidingHeight] = useState(false);
-  const [driverLists, setdriverLists] = useState([]);
+  const [driverLists, setdriverLists] = useState<DriverType[]>([]);
   const [selectedDriver, setselectedDriver] = useState<DriverType>();
   const [driverLoader, setdriverLoader] = useState(true);
+
+  // Set dummy data when location is selected
+  useEffect(() => {
+    if (locationSelected) {
+      setdriverLists(dummyDrivers);
+      setdriverLoader(false);
+    }
+  }, [locationSelected]);
 
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -96,10 +117,8 @@ export default function RidePlanScreen() {
   }, []);
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Toast.show(
           "Please approve your location tracking otherwise you can't use this app!",
@@ -108,37 +127,29 @@ export default function RidePlanScreen() {
             placement: "bottom",
           }
         );
-        return;
       }
 
-      subscription = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 2000,
-          distanceInterval: 1,
-        },
-        (location) => {
-          const { latitude, longitude } = location.coords;
-
-          setCurrentLocation({ latitude, longitude });
-
-          mapRef.current?.animateToRegion({
-            latitude,
-            longitude,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }, 1000);
-        }
-      );
+      let location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const { latitude, longitude } = location.coords;
+      setCurrentLocation({ latitude, longitude });
+      setRegion({
+        latitude,
+        longitude,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      });
     })();
-
-    return () => {
-      subscription && subscription.remove();
-    };
   }, []);
 
   const initializeWebSocket = () => {
-  ws.current = new WebSocket("ws:// 10.239.120.94:8080");
+    // Abort previous requests before new WS init
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const wsUrl = process.env.EXPO_PUBLIC_WS_SERVER || 'ws://localhost:8080';
+    ws.current = new WebSocket(wsUrl);
     ws.current.onopen = () => {
       console.log("Connected to websocket server");
       setWsConnected(true);
@@ -224,10 +235,17 @@ export default function RidePlanScreen() {
   }
 
   const fetchPlaces = async (input: any) => {
+    // Abort previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     try {
       const response = await axios.get(
         `https://maps.googleapis.com/maps/api/place/autocomplete/json`,
         {
+          signal: controller.signal,
           params: {
             input,
             key: process.env.EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY,
@@ -277,9 +295,15 @@ export default function RidePlanScreen() {
       }
 
       try {
+        // Abort previous
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
         const response = await axios.get(
           `https://maps.googleapis.com/maps/api/distancematrix/json`,
-          { params }
+          { params, signal: controller.signal }
         );
 
         const elements = response.data.rows[0].elements[0];
@@ -296,9 +320,16 @@ export default function RidePlanScreen() {
 
   const handlePlaceSelect = async (placeId: any) => {
     try {
+      // Abort previous
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       const response = await axios.get(
         `https://maps.googleapis.com/maps/api/place/details/json`,
         {
+          signal: controller.signal,
           params: {
             place_id: placeId,
             key: process.env.EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY,
@@ -318,7 +349,7 @@ export default function RidePlanScreen() {
         longitude: lng,
       });
       setPlaces([]);
-      requestNearbyDrivers();
+      // requestNearbyDrivers(); // Disabled for dummy data
       setlocationSelected(true);
       setkeyboardAvoidingHeight(false);
       if (currentLocation) {
@@ -373,14 +404,21 @@ export default function RidePlanScreen() {
   };
 
   const getDriversData = async (drivers: any) => {
+    // Abort previous API calls
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     // Extract driver IDs from the drivers array
     const driverIds = drivers.map((driver: any) => driver.id).join(",");
-    const response = await axios.get(`${process.env.EXPO_PUBLIC_SERVER_URI}/driver/get-drivers-data`, {
-      params: { ids: driverIds },
-    }).catch((error: any) => {
-      console.error("Drivers API Error:", error.message, error.response?.status, error.config?.url);
-      throw error;
-    });
+    const response = await axios.get(
+      `${process.env.EXPO_PUBLIC_SERVER_URI}/driver/get-drivers-data`,
+      {
+        params: { ids: driverIds },
+        signal: abortControllerRef.current!.signal,
+      }
+    );
 
     const driverData = response.data;
     setdriverLists(driverData);
@@ -447,16 +485,12 @@ export default function RidePlanScreen() {
           style={{ height: windowHeight(!keyboardAvoidingHeight ? 500 : 300) }}
         >
           <MapView
-            ref={mapRef}
-            provider="google"
             style={{ flex: 1 }}
-            initialRegion={region}
-            showsUserLocation={true}
-            followsUserLocation={true}
-            loadingEnabled={true}
-            onMapReady={() => console.log("Map loaded")}
+            region={region}
+            onRegionChangeComplete={(region) => setRegion(region)}
           >
             {marker && <Marker coordinate={marker} />}
+            {currentLocation && <Marker coordinate={currentLocation} />}
             {currentLocation && marker && (
               <MapViewDirections
                 origin={currentLocation}
@@ -464,7 +498,6 @@ export default function RidePlanScreen() {
                 apikey={process.env.EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY!}
                 strokeWidth={4}
                 strokeColor="blue"
-                onError={(error) => console.log("Rideplan Directions error:", error)}
               />
             )}
           </MapView>
@@ -549,7 +582,7 @@ export default function RidePlanScreen() {
                         >
                           <View>
                             <Text style={{ fontSize: 20, fontWeight: "600" }}>
-                              Chakraa {driver?.vehicle_type}
+                              RideWave {driver?.vehicle_type}
                             </Text>
                             <Text style={{ fontSize: 16 }}>
                               {getEstimatedArrivalTime(travelTimes.driving)}{" "}
@@ -562,7 +595,7 @@ export default function RidePlanScreen() {
                               fontWeight: "600",
                             }}
                           >
-                            INR{" "}
+                            BDT{" "}
                             {(
                               distance.toFixed(2) * parseInt(driver.rate)
                             ).toFixed(2)}
@@ -740,4 +773,3 @@ export default function RidePlanScreen() {
     </KeyboardAvoidingView>
   );
 }
-

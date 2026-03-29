@@ -1,12 +1,11 @@
-# Task: Create new tab screen "Track" with compass icon
+# Track Screen UI Enhancement - Progress Tracker
 
-## Steps:
-- [x] Create `user/screens/track/track.screen.tsx` (placeholder with location demo)
-- [x] Create `user/app/(tabs)/track.tsx` (route file importing screen)
-- [x] Create `user/assets/icons/compass.tsx` (SVG icon)
-- [ ] Update `user/app/(tabs)/_layout.tsx` to add Track tab and icon logic
-- [ ] Test: Run `cd user && npx expo start`, check tabs
+## Plan Steps:
+- [ ] Step 1: Update firebase.ts to ensure database/auth exports.
+- [ ] Step 2: Implement new styles and JSX structure in track.screen.tsx.
+- [ ] Step 3: Integrate dynamic data into new UI elements.
+- [ ] Step 4: Test and verify functionality.
+- [ ] Step 5: Mark complete and cleanup TODO.md.
 
-## Next:
-Run the app to verify the new tab appears between history and profile with compass icon.
+Current progress will be updated after each step.
 

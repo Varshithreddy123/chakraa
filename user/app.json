@@ -19,11 +19,12 @@
       }
     },
     "android": {
+      "package": "com.chaakra.Bus",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.chaakra.Bus",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyB2FZr208vxtUuEH4NLT87LnnDDDtRsemo"
@@ -38,12 +39,23 @@
       [
         "expo-font",
         {
-          "fonts": ["./assets/fonts/TT-Octosquares-Medium.ttf"]
+          "fonts": [
+            "./assets/fonts/TT-Octosquares-Medium.ttf"
+          ]
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "a2d7860c-7cc6-4101-a623-6983215b2f5f"
+      }
+    },
+    "owner": "m.varshithreddy"
   }
 }
